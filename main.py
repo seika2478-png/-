@@ -9,15 +9,16 @@ from openai import AsyncOpenAI
 load_dotenv()
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if not DISCORD_TOKEN:
     raise ValueError("DISCORD_TOKEN 설정을 확인해 주세요!")
 
-# Ollama 로컬 AI 연결
-ai = AsyncOpenAI(
-    base_url="http://localhost:11434/v1",
-    api_key="ollama"
-)
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY 설정을 확인해 주세요!")
+
+# OpenAI 클라우드 AI 연결
+ai = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -41,7 +42,6 @@ PERSONALITY = """
 
 CALL_NAME = "이안아"
 
-
 @bot.event
 async def on_ready():
     await bot.change_presence(
@@ -50,25 +50,26 @@ async def on_ready():
     )
     print(f"이안 접속 완료! {bot.user}")
 
-
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    # ! 명령어 처리
+    # 명령어 처리
     await bot.process_commands(message)
 
     # 명령어에는 AI가 반응하지 않음
     if message.content.startswith("!"):
         return
 
-    # '이안아'가 없으면 무시
+    # 이안아 호출 확인
     if CALL_NAME not in message.content:
         return
 
     # 호출어 제거
-    user_message = message.content.replace(CALL_NAME, "", 1).strip()
+    user_message = message.content.replace(
+        CALL_NAME, "", 1
+    ).strip()
 
     if not user_message:
         user_message = "나를 불렀어?"
@@ -90,13 +91,15 @@ async def on_message(message):
             print(f"AI 응답 요청: {message.author}")
 
             response = await ai.chat.completions.create(
-                model="qwen2.5:1.5b",
+                model="gpt-5.5",
                 messages=[
-                    {"role": "system", "content": PERSONALITY},
+                    {
+                        "role": "system",
+                        "content": PERSONALITY
+                    },
                     *histories[user_id]
                 ],
-                 max_tokens=120,
-                 temperature=0.7
+                max_completion_tokens=250
             )
 
             answer = (
@@ -119,27 +122,24 @@ async def on_message(message):
                 )
 
         except Exception as e:
-            print("Ollama 오류:", repr(e))
+            print("OpenAI 오류:", repr(e))
+
             await message.reply(
-                "AI 연결에 문제가 생겼어요. Ollama를 확인해 주세요!",
+                "AI 연결에 문제가 생겼어요. 잠시 후 다시 시도해 주세요!",
                 mention_author=False
             )
-
 
 @bot.command()
 async def 안녕(ctx):
     await ctx.send("안녕하세요!")
 
-
 @bot.command()
 async def 정보(ctx):
     await ctx.send("저는 AI 대화형 로봇 이안입니다!")
-
 
 @bot.command()
 async def 초기화(ctx):
     histories.pop(ctx.author.id, None)
     await ctx.send("대화 기록을 초기화했어요!")
-
 
 bot.run(DISCORD_TOKEN)
